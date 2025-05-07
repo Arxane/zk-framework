@@ -1,4 +1,0 @@
-inputs: a=5, b=3
-outputs: res=24
-gates: add a b res 1000
-gates: mul res b res 1000

@@ -1,0 +1,6 @@
+name: password_check
+inputs: hashed_password=315, user_input=45
+outputs: result=1
+gates:
+    hash user_input hashed_result
+    eq hashed_result hashed_password result

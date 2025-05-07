@@ -1,4 +1,6 @@
 use std::{collections::HashMap, i32}; //hashmap for key-values pairs
+pub mod parser; // expose the file `parser.rs`
+pub use parser::parse_circuit; // expose function directly
 
 pub fn mod_add(a: i32, b: i32, modulus: i32) -> i32 {
     (a + b) % modulus
@@ -25,6 +27,8 @@ pub enum Gate {
     Sub(String, String, String, Option<i32>),    
     Xor(String, String, String),     
     Const(String, i32),
+    Hash(String, String), //Hash(input, output)
+    Eq(String, String, String), //Eq(a,b,output_bool)
 }
 
 #[derive(Debug)] //for execution
@@ -83,6 +87,18 @@ impl Circuit {
                         values.insert(c.clone(), x^y);
                     }
                 }
+                Gate::Hash(input, output) => {
+                    if let Some(val) = values.get(input) {
+                        // simple fake hash (for now): val * 7 % 1000
+                        let hashed = (*val * 7) % 1000;
+                        values.insert(output.clone(), hashed);
+                    }
+                }
+                Gate::Eq(a, b, out) => {
+                    if let (Some(x), Some(y)) = (values.get(a), values.get(b)) {
+                        values.insert(out.clone(), if x == y { 1 } else { 0 });
+                    }
+                }                
             }
         }
 
