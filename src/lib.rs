@@ -2,6 +2,18 @@ use std::{collections::HashMap, i32}; //hashmap for key-values pairs
 pub mod parser; // expose the file `parser.rs`
 pub use parser::parse_circuit; // expose function directly
 
+#[derive(Debug, Clone)]
+pub struct R1CSConstraint{
+    pub a: Vec<String>,
+    pub b: Vec<String>,
+    pub c: Vec<String>,
+
+}
+
+pub struct R1CSSystem {
+    pub constraints: Vec<R1CSConstraint>, //list of R1CS constraints
+}
+
 pub fn mod_add(a: i32, b: i32, modulus: i32) -> i32 {
     (a + b) % modulus
 }
@@ -18,6 +30,11 @@ pub fn mod_inv(a: i32, modulus: i32) -> Option<i32> {
     }
     None
 }
+
+pub fn generate_keys(circuit: &Circuit) -> (ProvingKey, VerifyingKey) {
+    (ProvingKey {}, VerifyingKey {})
+}
+
 
 
 #[derive(Debug)]
@@ -39,89 +56,97 @@ pub struct Circuit { //public struct accessible by main
     pub gates: Vec<Gate>, //logic
 }
 
-#[derive(Debug)]
-pub struct Proof {
-    pub circuit_name: String, //name of circuit of proof
-    pub data: String, //proof data
-}
+
 
 pub struct Verifier;
 
-impl Verifier {
-    //logging the circuit being verified
-    pub fn verify(circuit: &Circuit, proof: &Proof) -> bool {
-        println!("Verifying proof for circuit: {}", circuit.name);
-        circuit.name == proof.circuit_name && proof.data == "valid" //proof is valid if circuit name matches and data is valid
-    }
-}
 
 impl Circuit {
-    pub fn simulate(&self) -> HashMap<String, i32> {
-        let mut values = self.inputs.clone();
+    pub fn to_r1cs_constraints(&self) -> R1CSSystem {
+        let mut constraints = Vec::new(); // Initialize a vector to store constraints
 
         for gate in &self.gates {
             match gate {
                 Gate::Add(a, b, c, modulus) => {
-                    if let (Some(x), Some(y)) = (values.get(a), values.get(b)) {
-                        let result = mod_add(*x, *y, modulus.unwrap_or(1000));
-                        values.insert(c.clone(), result);
-                    }
+                    let constraint = R1CSConstraint {
+                        a: vec![a.clone(), b.clone()], // Variables for the addition (a + b)
+                        b: vec![String::from("1"), String::from("1")], // Coefficients for addition (no scaling)
+                        c: vec![c.clone()], // Result of the addition (c)
+                    };
+                    constraints.push(constraint); // Add the constraint to the vector
                 }
                 Gate::Mul(a, b, c, modulus) => {
-                    if let (Some(x), Some(y)) = (values.get(a), values.get(b)) {
-                        let result = mod_mul(*x, *y,modulus.unwrap_or(1000));
-                        values.insert(c.clone(), result);
-                    }
+                    let constraint = R1CSConstraint {
+                        a: vec![a.clone(), b.clone()], // Variables for multiplication (a * b)
+                        b: vec![String::from("1"), String::from("1")], // Coefficients for multiplication
+                        c: vec![c.clone()], // Result of the multiplication (c)
+                    };
+                    constraints.push(constraint); // Add the constraint to the vector
                 }
-                Gate::Const(a, val) => {
-                    values.insert(a.clone(), *val);
-                }
-                Gate::Sub(a,b ,c, modulus) => {
-                    if let (Some(x), Some(y)) = (values.get(a), values.get(b)) {
-                        let result = mod_add(*x, -(*y),modulus.unwrap_or(1000));
-                        values.insert(c.clone(), result);
-                    }
-                }
-                Gate::Xor(a,b ,c )=>{
-                    if let (Some(x), Some(y)) = (values.get(a), values.get(b)){
-                        values.insert(c.clone(), x^y);
-                    }
-                }
-                Gate::Hash(input, output) => {
-                    if let Some(val) = values.get(input) {
-                        // simple fake hash (for now): val * 7 % 1000
-                        let hashed = (*val * 7) % 1000;
-                        values.insert(output.clone(), hashed);
-                    }
+                Gate::Sub(a, b, c, modulus) => {
+                    let constraint = R1CSConstraint {
+                        a: vec![a.clone(), b.clone()], // Variables for subtraction (a - b)
+                        b: vec![String::from("1"), String::from("-1")], // Coefficients for subtraction (a - b)
+                        c: vec![c.clone()], // Result of the subtraction (c)
+                    };
+                    constraints.push(constraint); // Add the constraint to the vector
                 }
                 Gate::Eq(a, b, out) => {
-                    if let (Some(x), Some(y)) = (values.get(a), values.get(b)) {
-                        values.insert(out.clone(), if x == y { 1 } else { 0 });
-                    }
-                }                
+                    let constraint = R1CSConstraint {
+                        a: vec![a.clone(), b.clone()], // Variables for equality (a == b)
+                        b: vec![String::from("1"), String::from("-1")], // Coefficients for equality (a == b)
+                        c: vec![out.clone()], // Output of the equality check (0 or 1)
+                    };
+                    constraints.push(constraint); // Add the constraint to the vector
+                }
+                Gate::Hash(input, output) => {
+                    let constraint = R1CSConstraint {
+                        a: vec![input.clone()], // Input to the hash
+                        b: vec![String::from("7")], // A fake hash multiplier (this is just a placeholder)
+                        c: vec![output.clone()], // Output of the hash
+                    };
+                    constraints.push(constraint); // Add the constraint to the vector
+                }
+                _ => continue, // Skip unsupported gate types
             }
         }
 
-        values
+        R1CSSystem { constraints } // Return the R1CS system with all constraints
     }
 }
 
-pub fn prove(circuit: &Circuit) -> Proof {
-    println!("Proving circuit: {}", circuit.name);
+pub struct ProvingKey {
 
-    let simulated = circuit.simulate();
+}
 
-    for (key, expected) in &circuit.outputs {
-        if simulated.get(key) != Some(expected) {
-            return Proof {
-                circuit_name: circuit.name.clone(),
-                data: "invalid".to_string(),
-            };
+pub struct VerifyingKey {
+
+}
+
+impl R1CSSystem {
+    pub fn generate_keys(&self) -> (ProvingKey, VerifyingKey) {
+        let proving_key = ProvingKey{};
+        let verifying_key = VerifyingKey{};
+        (proving_key, verifying_key)
+    }
+}
+
+
+#[derive(Debug)]
+pub struct Proof {
+    pub data: String,
+}
+
+impl Circuit {
+    pub fn prove(&self, proving_key: &ProvingKey) -> Proof {
+        Proof {
+            data: "valid".to_string(),
         }
     }
-    Proof {
-        circuit_name: circuit.name.clone(),
-        data: "valid".to_string(),
-    }
 }
 
+impl Verifier {
+    pub fn verify(&self, proof: &Proof, verifying_key: &VerifyingKey, circuit: &Circuit) -> bool {
+        proof.data == "valid"
+    }
+}

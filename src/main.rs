@@ -1,5 +1,5 @@
 use std::env;
-use zk_framework::{parse_circuit, prove, Verifier}; // your lib.rs module
+use zk_framework::{parse_circuit, Verifier, generate_keys}; // Make sure generate_keys is also imported
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -12,9 +12,15 @@ fn main() {
     let circuit = parse_circuit(path).expect("Failed to parse circuit");
     println!("Parsed Circuit: {:?}", circuit);
 
-    let proof = prove(&circuit);
+    // Generate proving and verifying keys
+    let (pk, vk) = generate_keys(&circuit);
+
+    let proof = circuit.prove(&pk);
     println!("Generated Proof: {:?}", proof);
 
-    let is_valid = Verifier::verify(&circuit, &proof);
+    // Create Verifier instance
+    let verifier = Verifier {};
+    let is_valid = verifier.verify(&proof, &vk, &circuit);
+
     println!("Verification Result: {}", is_valid);
 }

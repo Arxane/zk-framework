@@ -1,6 +1,9 @@
 name: password_check
-inputs: hashed_password=315, user_input=45
-outputs: result=1
+inputs:
+  - hashed_password: 315
+  - user_input: 45
+outputs:
+  - result: 1
 gates:
-    hash user_input hashed_result
-    eq hashed_result hashed_password result
+  - hash user_input hashed_result       # Hash the user_input and store it in hashed_result
+  - eq hashed_result hashed_password result  # Check if hashed_result equals the hashed_password
