@@ -222,26 +222,3 @@ impl Verifier {
     }
 }
 
-fn main() {
-    use crate::parser::parse_circuit;
-
-    let circuit = Circuit {
-        name: "simple_add".to_string(),
-        inputs: HashMap::new(),
-        outputs: HashMap::new(),
-        gates: vec![
-            Gate::Const("one".to_string(), 1),
-            Gate::Add("one".to_string(), "one".to_string(), "two".to_string(), None),
-        ],
-    };
-
-    let mut var_index = HashMap::new();
-    let mut next_index = 1;
-
-    let r1cs = circuit.to_r1cs_constraints(&mut var_index, &mut next_index);
-    let (a, b, c) = r1cs.to_matrices(&mut var_index, &mut next_index);
-
-    println!("Matrix A: {:?}", a);
-    println!("Matrix B: {:?}", b);
-    println!("Matrix C: {:?}", c);
-}
