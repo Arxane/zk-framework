@@ -29,7 +29,7 @@ This project implements a zk-SNARK (Zero-Knowledge Succinct Non-Interactive Argu
 1. **Clone the repository:**
 
    ```bash
-   git clone https://github.com/yourusername/zk-snark-rust.git
+   git clone https://github.com/arxane/zk-framework.git
    cd zk-snark-rust
 2. **Build the project:**
 
