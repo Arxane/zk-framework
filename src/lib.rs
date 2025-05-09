@@ -1,14 +1,26 @@
-use std::{collections::HashMap, i32}; //hashmap for key-values pairs
+use std::collections::{HashMap, HashSet}; //hashmap for key-values pairs
 pub mod parser; // expose the file `parser.rs`
 pub use parser::parse_circuit; // expose function directly
 
 #[derive(Debug, Clone)]
-pub struct R1CSConstraint{
-    pub a: Vec<String>,
-    pub b: Vec<String>,
-    pub c: Vec<String>,
-
+pub struct R1CSConstraint {
+    pub a: HashMap<usize, i32>,
+    pub b: HashMap<usize, i32>,
+    pub c: HashMap<usize, i32>,
 }
+
+fn get_index(var: &str, var_index: &mut HashMap<String, usize>, next_index: &mut usize) -> usize {
+    if let Some(&idx) = var_index.get(var) {
+        idx
+    } else {
+        let idx = *next_index;
+        var_index.insert(var.to_string(), idx);
+        *next_index += 1;
+        idx
+    }
+}
+
+
 
 pub struct R1CSSystem {
     pub constraints: Vec<R1CSConstraint>, //list of R1CS constraints
@@ -62,50 +74,90 @@ pub struct Verifier;
 
 
 impl Circuit {
-    pub fn to_r1cs_constraints(&self) -> R1CSSystem {
+    pub fn to_r1cs_constraints(&self, var_index:&mut HashMap<String, usize>, next_index: &mut usize) -> R1CSSystem {
         let mut constraints = Vec::new(); // Initialize a vector to store constraints
+
+        var_index.insert("1".to_string(),0);
 
         for gate in &self.gates {
             match gate {
                 Gate::Add(a, b, c, modulus) => {
-                    let constraint = R1CSConstraint {
-                        a: vec![a.clone(), b.clone()], // Variables for the addition (a + b)
-                        b: vec![String::from("1"), String::from("1")], // Coefficients for addition (no scaling)
-                        c: vec![c.clone()], // Result of the addition (c)
-                    };
-                    constraints.push(constraint); // Add the constraint to the vector
+                    let a_idx = get_index(a, var_index, next_index);
+                    let b_idx = get_index(b, var_index, next_index);
+                    let c_idx = get_index(c, var_index, next_index);
+
+                    constraints.push(R1CSConstraint {
+                        a: vec![(a_idx, 1), (b_idx, 1)].into_iter().collect(),
+                        b: vec![(var_index["1"], 1)].into_iter().collect(),
+                        c: vec![(c_idx, 1)].into_iter().collect(),
+                    }) // Add the constraint to the vector
                 }
                 Gate::Mul(a, b, c, modulus) => {
-                    let constraint = R1CSConstraint {
-                        a: vec![a.clone(), b.clone()], // Variables for multiplication (a * b)
-                        b: vec![String::from("1"), String::from("1")], // Coefficients for multiplication
-                        c: vec![c.clone()], // Result of the multiplication (c)
-                    };
-                    constraints.push(constraint); // Add the constraint to the vector
+                    let a_idx = get_index(a, var_index, next_index);
+                    let b_idx = get_index(b, var_index, next_index);
+                    let c_idx = get_index(c, var_index, next_index);
+
+                    constraints.push(R1CSConstraint {
+                        a: vec![(a_idx, 1)].into_iter().collect(),
+                        b: vec![(b_idx, 1)].into_iter().collect(),
+                        c: vec![(c_idx, 1)].into_iter().collect(),
+                    }); 
                 }
                 Gate::Sub(a, b, c, modulus) => {
-                    let constraint = R1CSConstraint {
-                        a: vec![a.clone(), b.clone()], // Variables for subtraction (a - b)
-                        b: vec![String::from("1"), String::from("-1")], // Coefficients for subtraction (a - b)
-                        c: vec![c.clone()], // Result of the subtraction (c)
-                    };
-                    constraints.push(constraint); // Add the constraint to the vector
+                    let a_idx = get_index(a, var_index, next_index);
+                    let b_idx = get_index(b, var_index, next_index);
+                    let c_idx = get_index(c, var_index, next_index);
+
+                    constraints.push(R1CSConstraint {
+                        a: vec![(a_idx, 1), (b_idx, -1)].into_iter().collect(),
+                        b: vec![(var_index["1"], 1)].into_iter().collect(),
+                        c: vec![(c_idx, 1)].into_iter().collect(),
+                    }); 
                 }
                 Gate::Eq(a, b, out) => {
-                    let constraint = R1CSConstraint {
-                        a: vec![a.clone(), b.clone()], // Variables for equality (a == b)
-                        b: vec![String::from("1"), String::from("-1")], // Coefficients for equality (a == b)
-                        c: vec![out.clone()], // Output of the equality check (0 or 1)
-                    };
-                    constraints.push(constraint); // Add the constraint to the vector
+                    let a_idx = get_index(a, var_index, next_index);
+                    let b_idx = get_index(b, var_index, next_index);
+                    let out_idx = get_index(out, var_index, next_index);
+
+                    constraints.push(R1CSConstraint {
+                        a: vec![(a_idx, 1), (b_idx, -1)].into_iter().collect(),
+                        b: vec![(var_index["1"], 1)].into_iter().collect(),
+                        c: vec![(out_idx, 1)].into_iter().collect(),
+                    }); 
                 }
                 Gate::Hash(input, output) => {
-                    let constraint = R1CSConstraint {
-                        a: vec![input.clone()], // Input to the hash
-                        b: vec![String::from("7")], // A fake hash multiplier (this is just a placeholder)
-                        c: vec![output.clone()], // Output of the hash
-                    };
-                    constraints.push(constraint); // Add the constraint to the vector
+                    let input_idx = get_index(input, var_index, next_index);
+                    let output_idx = get_index(output, var_index, next_index);
+                    constraints.push(R1CSConstraint {
+                        a: vec![(input_idx, 1)].into_iter().collect(),
+                        b: vec![(var_index["1"], 7)].into_iter().collect(), // Fake hash with multiplier
+                        c: vec![(output_idx, 1)].into_iter().collect(),
+                    }); 
+                }
+                Gate::Const(name,val ) => {
+                    let idx = get_index(name, var_index, next_index);
+                    constraints.push(R1CSConstraint {
+                        a: vec![(var_index["1"],1)].into_iter().collect(),
+                        b: vec![(var_index["1"],1)].into_iter().collect(),
+                        c: vec![(idx, *val)].into_iter().collect(),
+                    });
+                }
+                Gate::Xor(a,b ,c ) => {
+                    let a_idx = get_index(a, var_index, next_index);
+                    let b_idx = get_index(b, var_index, next_index);
+                    let ab_idx = get_index(&format!("{}_{}",a,b), var_index, next_index);
+                    let c_idx = get_index(c, var_index, next_index);
+
+                    constraints.push(R1CSConstraint {
+                        a: vec![(a_idx,1)].into_iter().collect(),
+                        b: vec![(b_idx,1)].into_iter().collect(),
+                        c: vec![(ab_idx, 1)].into_iter().collect(),
+                    });
+                    constraints.push(R1CSConstraint {
+                        a: vec![(a_idx,1),(b_idx,1),(ab_idx,-2)].into_iter().collect(),
+                        b: vec![(var_index["1"],1)].into_iter().collect(),
+                        c: vec![(c_idx,1)].into_iter().collect(),
+                    });
                 }
                 _ => continue, // Skip unsupported gate types
             }
@@ -114,7 +166,6 @@ impl Circuit {
         R1CSSystem { constraints } // Return the R1CS system with all constraints
     }
 }
-
 pub struct ProvingKey {
 
 }
@@ -124,6 +175,26 @@ pub struct VerifyingKey {
 }
 
 impl R1CSSystem {
+    pub fn to_matrices(
+        &self,
+        _var_index: &mut HashMap<String, usize>,
+        _next_index: &mut usize,
+    )-> (
+        Vec<HashMap<usize, i32>>,
+        Vec<HashMap<usize, i32>>,
+        Vec<HashMap<usize, i32>>,
+    ) {
+        let mut a_matrix = Vec::new();
+        let mut b_matrix = Vec::new();
+        let mut c_matrix = Vec::new();
+
+        for constraint in &self.constraints {
+            a_matrix.push(constraint.a.clone());
+            b_matrix.push(constraint.b.clone());
+            c_matrix.push(constraint.c.clone());
+        }
+        (a_matrix, b_matrix, c_matrix)
+    }
     pub fn generate_keys(&self) -> (ProvingKey, VerifyingKey) {
         let proving_key = ProvingKey{};
         let verifying_key = VerifyingKey{};
@@ -149,4 +220,28 @@ impl Verifier {
     pub fn verify(&self, proof: &Proof, verifying_key: &VerifyingKey, circuit: &Circuit) -> bool {
         proof.data == "valid"
     }
+}
+
+fn main() {
+    use crate::parser::parse_circuit;
+
+    let circuit = Circuit {
+        name: "simple_add".to_string(),
+        inputs: HashMap::new(),
+        outputs: HashMap::new(),
+        gates: vec![
+            Gate::Const("one".to_string(), 1),
+            Gate::Add("one".to_string(), "one".to_string(), "two".to_string(), None),
+        ],
+    };
+
+    let mut var_index = HashMap::new();
+    let mut next_index = 1;
+
+    let r1cs = circuit.to_r1cs_constraints(&mut var_index, &mut next_index);
+    let (a, b, c) = r1cs.to_matrices(&mut var_index, &mut next_index);
+
+    println!("Matrix A: {:?}", a);
+    println!("Matrix B: {:?}", b);
+    println!("Matrix C: {:?}", c);
 }
