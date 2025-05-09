@@ -42,7 +42,6 @@ This project implements a zk-SNARK (Zero-Knowledge Succinct Non-Interactive Argu
 
 ## Example Circuit
 
-    ```txt
     inputs: a=3, b=5, c=7, d=2
     outputs: result=16, intermediate=10
 
